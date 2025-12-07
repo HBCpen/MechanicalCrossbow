@@ -30,56 +30,36 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
 
                 if (!isCharged) {
                     // Not charged: Auto-Reload
-                    // Check if we are already pressing it via automation
-                    if (!client.options.keyUse.isDown()) {
-                        client.options.keyUse.setDown(true);
-                        autoReloading = true;
-                    }
+                    // ALWAYS force the key down. Do not check if it's already down.
+                    // This prevents gaps if the user clicks/releases the button, which would reset
+                    // reload.
+                    client.options.keyUse.setDown(true);
+                    autoReloading = true;
                 } else {
                     // Charged
                     if (autoReloading) {
-                        // We finished loading, release the key to reset state
+                        // We just finished loading.
+                        // We must release the key to "complete" the reload state and not just sit
+                        // holding a loaded bow.
                         client.options.keyUse.setDown(false);
                         autoReloading = false;
                     } else {
-                        // If we are NOT auto-reloading (user control or idle),
-                        // enable Rapid Fire if user is holding the key.
+                        // Charged and not auto-reloading (Ready to fire).
 
-                        // If user is holding the key, options.keyUse.isDown() should be true (if
-                        // updated by game).
+                        // Check if User wants to fire (User is holding the key).
+                        // Note: We check the key state. If the user is holding it, isDown() is true.
                         if (client.options.keyUse.isDown()) {
-                            // The user is holding the key, but it's already charged.
-                            // To fire, we need to register a "Use" click.
-                            // If the game considers "Holding" as "Pressed", it might not trigger "Use" if
-                            // it requires a fresh click.
-                            // We toggle it off then on to simulate a click?
+                            // The user is holding the key.
+                            // To fire a loaded crossbow, we need a fresh "Press" (Use Item).
+                            // Holding the key statically usually does nothing for a charged crossbow.
+                            // We simulate a Rapid Fire by forcing the key UP (False) for this tick.
 
-                            // Strategy: Release for 1 tick, then Press?
-                            // Or just Press?
-                            // Standard Crossbow fires on release? No, fires on Use.
-                            // Let's try to release it now, so next tick the user's physical hold
-                            // re-triggers a Press?
-                            // Or we force a Press ourselves.
-
-                            // Let's try: Force Release simply.
-                            // If we force release this tick, next tick the input system will read "Held"
-                            // and set "Pressed".
-                            // This might create a rapid pulse: Press(Tick1) -> Fire -> Charged=False ->
-                            // Reload loop.
-
+                            // Mechanism:
+                            // Tick N: Input=True (User). We force SetDown(False). Game sees False.
+                            // Tick N+1: Input=True (User). Game sees False->True transition. FIRE!
+                            // Tick N+1 End: We force SetDown(False).
+                            // Repeat.
                             client.options.keyUse.setDown(false);
-
-                            // Wait, if we release it, it won't fire?
-                            // Firing happens when you USE the item.
-                            // If you hold it, does it use it?
-                            // If I hold right click with a charged crossbow, it fires immediately?
-                            // No. You have to click.
-                            // So if keys is Pressed, and we do NOTHING, nothing happens.
-                            // We need to simulate a "Release -> Press" or "Press" event.
-
-                            // If we setPressed(false) this tick...
-                            // Then next tick, if user holds, it becomes Pressed.
-                            // This 0 -> 1 transition might trigger the use.
                         }
                     }
                 }

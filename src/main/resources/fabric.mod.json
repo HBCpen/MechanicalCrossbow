@@ -1,0 +1,27 @@
+{
+    "schemaVersion": 1,
+    "id": "mechanical-crossbow",
+    "version": "${version}",
+    "name": "Mechanical Crossbow",
+    "description": "Automates crossbow reloading and firing.",
+    "authors": [
+        "User"
+    ],
+    "contact": {
+        "sources": "https://github.com/headblock/mechanical-crossbow"
+    },
+    "license": "MIT",
+    "environment": "client",
+    "entrypoints": {
+        "client": [
+            "net.hbcpen.mechanicalcrossbow.client.MechanicalCrossbowClient"
+        ]
+    },
+    "mixins": [],
+    "depends": {
+        "fabricloader": ">=0.16.5",
+        "minecraft": "~1.21.10",
+        "java": ">=21",
+        "fabric-api": "*"
+    }
+}

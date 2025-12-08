@@ -3,12 +3,12 @@ package net.hbcpen.mechanicalcrossbow.client;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 
 public class MechanicalCrossbowClient implements ClientModInitializer {
     private boolean autoReloading = false;
-    private boolean fireToggle = false;
 
     @Override
     public void onInitializeClient() {
@@ -21,10 +21,13 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
             ItemStack offHandStack = client.player.getOffhandItem();
 
             ItemStack crossbowStack = null;
+            InteractionHand hand = null;
             if (mainHandStack.getItem() instanceof CrossbowItem) {
                 crossbowStack = mainHandStack;
+                hand = InteractionHand.MAIN_HAND;
             } else if (offHandStack.getItem() instanceof CrossbowItem) {
                 crossbowStack = offHandStack;
+                hand = InteractionHand.OFF_HAND;
             }
 
             if (crossbowStack != null) {
@@ -33,39 +36,34 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
                 if (!isCharged) {
                     // AUTO-RELOAD
                     // Force key down regardless of user input.
-                    // Since this is START_TICK, it overrides the polling done just before.
                     client.options.keyUse.setDown(true);
                     autoReloading = true;
-                    fireToggle = false; // Reset fire toggle
                 } else {
                     // CHARGED
                     if (autoReloading) {
-                        // Just finished reloading.
-                        // Force release to reset "Using" state so we can fire next.
+                        // Reload finished. Release key.
                         client.options.keyUse.setDown(false);
                         autoReloading = false;
-                        fireToggle = true; // Prepare to fire if holding
                     } else {
-                        // AUTO-FIRE CHECK
-                        // If user is holding the key (polled input is True), we want to fire.
+                        // AUTO-FIRE
+                        // If user is holding right click, Force Fire immediately.
                         if (client.options.keyUse.isDown()) {
-                            // Oscillation Logic:
-                            // We need to simulate distinct Press events.
-                            // The game needs: False (Release) -> True (Press) -> Used!
-
-                            if (fireToggle) {
-                                // Tick A: Force Release.
-                                client.options.keyUse.setDown(false);
-                            } else {
-                                // Tick B: Allow Press (User's input is True).
-                                // Ensure it's true just in case.
-                                client.options.keyUse.setDown(true);
+                            // Direct interaction bypasses input polling issues
+                            if (client.gameMode != null) {
+                                client.gameMode.useItem(client.player, hand);
+                                // Note: firing usually consumes the charge immediately on client side.
                             }
-                            // Flip state for next tick
-                            fireToggle = !fireToggle;
-                        } else {
-                            // User not holding, reset toggle
-                            fireToggle = false;
+                            // We don't need to mess with setDown here if we use gameMode directly.
+                            // But maybe release it to prevent double-activation?
+                            // Actually, keeping it Down is fine because next tick it will be Uncharged ->
+                            // Auto Reload logic takes over(setDown True).
+
+                            // To be safe, let's allow natural input state to remain,
+                            // but since we manually fired, the game might double-fire if we don't handle
+                            // it?
+                            // Crossbows need reload after fire, so it shouldn't matter.
+
+                            // However, let's clear the toggle logic.
                         }
                     }
                 }
@@ -75,7 +73,6 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
                     client.options.keyUse.setDown(false);
                     autoReloading = false;
                 }
-                fireToggle = false;
             }
         });
     }

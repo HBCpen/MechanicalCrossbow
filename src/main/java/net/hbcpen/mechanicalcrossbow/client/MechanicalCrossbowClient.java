@@ -35,6 +35,16 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
             }
 
             if (crossbowStack != null) {
+                // Prevent operation if a GUI is open
+                if (client.currentScreen != null) {
+                    // If we were auto-reloading, release the key press
+                    if (autoReloading) {
+                        client.options.useKey.setPressed(false);
+                        autoReloading = false;
+                    }
+                    return;
+                }
+
                 boolean isCharged = CrossbowItem.isCharged(crossbowStack);
 
                 if (!isCharged) {
@@ -59,7 +69,9 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
 
                     if (userWantToFire) {
                         // User is holding the physical button. Fire!
-                        if (client.interactionManager != null) {
+                        // Only fire if not on cooldown
+                        if (client.interactionManager != null
+                                && !client.player.getItemCooldownManager().isCoolingDown(crossbowStack)) {
                             client.interactionManager.interactItem(client.player, hand);
                         }
                     } else {

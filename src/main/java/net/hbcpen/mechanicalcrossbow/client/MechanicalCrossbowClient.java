@@ -8,10 +8,12 @@ import net.minecraft.world.item.ItemStack;
 
 public class MechanicalCrossbowClient implements ClientModInitializer {
     private boolean autoReloading = false;
+    private boolean fireToggle = false;
 
     @Override
     public void onInitializeClient() {
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        // Use START_CLIENT_TICK to override input before game logic runs
+        ClientTickEvents.START_CLIENT_TICK.register(client -> {
             if (client.player == null)
                 return;
 
@@ -29,46 +31,51 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
                 boolean isCharged = CrossbowItem.isCharged(crossbowStack);
 
                 if (!isCharged) {
-                    // Not charged: Auto-Reload
-                    // ALWAYS force the key down. Do not check if it's already down.
-                    // This prevents gaps if the user clicks/releases the button, which would reset
-                    // reload.
+                    // AUTO-RELOAD
+                    // Force key down regardless of user input.
+                    // Since this is START_TICK, it overrides the polling done just before.
                     client.options.keyUse.setDown(true);
                     autoReloading = true;
+                    fireToggle = false; // Reset fire toggle
                 } else {
-                    // Charged
+                    // CHARGED
                     if (autoReloading) {
-                        // We just finished loading.
-                        // We must release the key to "complete" the reload state and not just sit
-                        // holding a loaded bow.
+                        // Just finished reloading.
+                        // Force release to reset "Using" state so we can fire next.
                         client.options.keyUse.setDown(false);
                         autoReloading = false;
+                        fireToggle = true; // Prepare to fire if holding
                     } else {
-                        // Charged and not auto-reloading (Ready to fire).
-
-                        // Check if User wants to fire (User is holding the key).
-                        // Note: We check the key state. If the user is holding it, isDown() is true.
+                        // AUTO-FIRE CHECK
+                        // If user is holding the key (polled input is True), we want to fire.
                         if (client.options.keyUse.isDown()) {
-                            // The user is holding the key.
-                            // To fire a loaded crossbow, we need a fresh "Press" (Use Item).
-                            // Holding the key statically usually does nothing for a charged crossbow.
-                            // We simulate a Rapid Fire by forcing the key UP (False) for this tick.
+                            // Oscillation Logic:
+                            // We need to simulate distinct Press events.
+                            // The game needs: False (Release) -> True (Press) -> Used!
 
-                            // Mechanism:
-                            // Tick N: Input=True (User). We force SetDown(False). Game sees False.
-                            // Tick N+1: Input=True (User). Game sees False->True transition. FIRE!
-                            // Tick N+1 End: We force SetDown(False).
-                            // Repeat.
-                            client.options.keyUse.setDown(false);
+                            if (fireToggle) {
+                                // Tick A: Force Release.
+                                client.options.keyUse.setDown(false);
+                            } else {
+                                // Tick B: Allow Press (User's input is True).
+                                // Ensure it's true just in case.
+                                client.options.keyUse.setDown(true);
+                            }
+                            // Flip state for next tick
+                            fireToggle = !fireToggle;
+                        } else {
+                            // User not holding, reset toggle
+                            fireToggle = false;
                         }
                     }
                 }
             } else {
-                // Not holding crossbow, reset state
+                // Not holding crossbow
                 if (autoReloading) {
                     client.options.keyUse.setDown(false);
                     autoReloading = false;
                 }
+                fireToggle = false;
             }
         });
     }

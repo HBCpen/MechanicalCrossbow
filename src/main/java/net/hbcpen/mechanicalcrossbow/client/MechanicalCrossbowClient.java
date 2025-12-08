@@ -2,10 +2,14 @@ package net.hbcpen.mechanicalcrossbow.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.minecraft.client.Minecraft;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.CrossbowItem;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.util.InputUtil;
+import org.lwjgl.glfw.GLFW;
+import net.minecraft.util.Hand;
+import net.minecraft.item.CrossbowItem;
+import net.minecraft.item.ItemStack;
+
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 
 public class MechanicalCrossbowClient implements ClientModInitializer {
     private boolean autoReloading = false;
@@ -17,17 +21,17 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
             if (client.player == null)
                 return;
 
-            ItemStack mainHandStack = client.player.getMainHandItem();
-            ItemStack offHandStack = client.player.getOffhandItem();
+            ItemStack mainHandStack = client.player.getMainHandStack();
+            ItemStack offHandStack = client.player.getOffHandStack();
 
             ItemStack crossbowStack = null;
-            InteractionHand hand = null;
+            Hand hand = null;
             if (mainHandStack.getItem() instanceof CrossbowItem) {
                 crossbowStack = mainHandStack;
-                hand = InteractionHand.MAIN_HAND;
+                hand = Hand.MAIN_HAND;
             } else if (offHandStack.getItem() instanceof CrossbowItem) {
                 crossbowStack = offHandStack;
-                hand = InteractionHand.OFF_HAND;
+                hand = Hand.OFF_HAND;
             }
 
             if (crossbowStack != null) {
@@ -36,41 +40,39 @@ public class MechanicalCrossbowClient implements ClientModInitializer {
                 if (!isCharged) {
                     // AUTO-RELOAD
                     // Force key down regardless of user input.
-                    client.options.keyUse.setDown(true);
+                    client.options.useKey.setPressed(true);
                     autoReloading = true;
                 } else {
                     // CHARGED
-                    if (autoReloading) {
-                        // Reload finished. Release key.
-                        client.options.keyUse.setDown(false);
-                        autoReloading = false;
-                    } else {
-                        // AUTO-FIRE
-                        // If user is holding right click, Force Fire immediately.
-                        if (client.options.keyUse.isDown()) {
-                            // Direct interaction bypasses input polling issues
-                            if (client.gameMode != null) {
-                                client.gameMode.useItem(client.player, hand);
-                                // Note: firing usually consumes the charge immediately on client side.
-                            }
-                            // We don't need to mess with setDown here if we use gameMode directly.
-                            // But maybe release it to prevent double-activation?
-                            // Actually, keeping it Down is fine because next tick it will be Uncharged ->
-                            // Auto Reload logic takes over(setDown True).
+                    // Check Hardware Input to see if user wants to fire.
+                    // We cannot trust keyUse.isDown() because we modify it.
 
-                            // To be safe, let's allow natural input state to remain,
-                            // but since we manually fired, the game might double-fire if we don't handle
-                            // it?
-                            // Crossbows need reload after fire, so it shouldn't matter.
+                    boolean userWantToFire = false;
+                    long windowHandle = client.getWindow().getHandle();
+                    InputUtil.Key boundKey = KeyBindingHelper.getBoundKeyOf(client.options.useKey);
 
-                            // However, let's clear the toggle logic.
+                    if (boundKey.getCategory() == InputUtil.Type.MOUSE) {
+                        userWantToFire = GLFW.glfwGetMouseButton(windowHandle, boundKey.getCode()) == GLFW.GLFW_PRESS;
+                    } else if (boundKey.getCategory() == InputUtil.Type.KEYSYM) {
+                        userWantToFire = GLFW.glfwGetKey(windowHandle, boundKey.getCode()) == GLFW.GLFW_PRESS;
+                    }
+
+                    if (userWantToFire) {
+                        // User is holding the physical button. Fire!
+                        if (client.interactionManager != null) {
+                            client.interactionManager.interactItem(client.player, hand);
                         }
+                    } else {
+                        // User released button.
+                        // We must release our hold.
+                        client.options.useKey.setPressed(false);
+                        autoReloading = false;
                     }
                 }
             } else {
                 // Not holding crossbow
                 if (autoReloading) {
-                    client.options.keyUse.setDown(false);
+                    client.options.useKey.setPressed(false);
                     autoReloading = false;
                 }
             }
